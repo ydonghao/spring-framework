@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,7 +20,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +34,7 @@ import reactor.core.publisher.Mono;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.i18n.LocaleContext;
 import org.springframework.core.ResolvableType;
+import org.springframework.core.codec.Hints;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
@@ -63,9 +63,18 @@ import org.springframework.web.util.UriUtils;
  * Default {@link ServerRequest.Builder} implementation.
  *
  * @author Arjen Poutsma
+ * @author Sam Brannen
  * @since 5.1
  */
 class DefaultServerRequestBuilder implements ServerRequest.Builder {
+
+	private final List<HttpMessageReader<?>> messageReaders;
+
+	private ServerWebExchange exchange;
+
+	private String methodName;
+
+	private URI uri;
 
 	private final HttpHeaders headers = new HttpHeaders();
 
@@ -73,37 +82,31 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	private final Map<String, Object> attributes = new LinkedHashMap<>();
 
-	private final List<HttpMessageReader<?>> messageReaders;
-
-	private ServerWebExchange exchange;
-
-	private HttpMethod method = HttpMethod.GET;
-
-	@Nullable
-	private URI uri;
-
 	private Flux<DataBuffer> body = Flux.empty();
 
-	public DefaultServerRequestBuilder(ServerRequest other) {
+
+	DefaultServerRequestBuilder(ServerRequest other) {
 		Assert.notNull(other, "ServerRequest must not be null");
 		this.messageReaders = other.messageReaders();
 		this.exchange = other.exchange();
-		method(other.method());
-		uri(other.uri());
-		headers(headers -> headers.addAll(other.headers().asHttpHeaders()));
-		cookies(cookies -> cookies.addAll(other.cookies()));
+		this.methodName = other.methodName();
+		this.uri = other.uri();
+		this.headers.addAll(other.headers().asHttpHeaders());
+		this.cookies.addAll(other.cookies());
+		this.attributes.putAll(other.attributes());
 	}
+
 
 	@Override
 	public ServerRequest.Builder method(HttpMethod method) {
-		Assert.notNull(method, "'method' must not be null");
-		this.method = method;
+		Assert.notNull(method, "HttpMethod must not be null");
+		this.methodName = method.name();
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder uri(URI uri) {
-		Assert.notNull(uri, "'uri' must not be null");
+		Assert.notNull(uri, "URI must not be null");
 		this.uri = uri;
 		return this;
 	}
@@ -118,7 +121,6 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder headers(Consumer<HttpHeaders> headersConsumer) {
-		Assert.notNull(headersConsumer, "'headersConsumer' must not be null");
 		headersConsumer.accept(this.headers);
 		return this;
 	}
@@ -132,17 +134,14 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 	}
 
 	@Override
-	public ServerRequest.Builder cookies(
-			Consumer<MultiValueMap<String, HttpCookie>> cookiesConsumer) {
-
-		Assert.notNull(cookiesConsumer, "'cookiesConsumer' must not be null");
+	public ServerRequest.Builder cookies(Consumer<MultiValueMap<String, HttpCookie>> cookiesConsumer) {
 		cookiesConsumer.accept(this.cookies);
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder body(Flux<DataBuffer> body) {
-		Assert.notNull(body, "'body' must not be null");
+		Assert.notNull(body, "Body must not be null");
 		releaseBody();
 		this.body = body;
 		return this;
@@ -150,7 +149,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder body(String body) {
-		Assert.notNull(body, "'body' must not be null");
+		Assert.notNull(body, "Body must not be null");
 		releaseBody();
 		DataBufferFactory dataBufferFactory = new DefaultDataBufferFactory();
 		this.body = Flux.just(body).
@@ -167,33 +166,33 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 	@Override
 	public ServerRequest.Builder attribute(String name, Object value) {
-		Assert.notNull(name, "'name' must not be null");
 		this.attributes.put(name, value);
 		return this;
 	}
 
 	@Override
 	public ServerRequest.Builder attributes(Consumer<Map<String, Object>> attributesConsumer) {
-		Assert.notNull(attributesConsumer, "'attributesConsumer' must not be null");
 		attributesConsumer.accept(this.attributes);
 		return this;
 	}
 
 	@Override
 	public ServerRequest build() {
-		ServerHttpRequest serverHttpRequest = new BuiltServerHttpRequest(this.method, this.uri,
-				this.headers, this.cookies, this.body);
-		ServerWebExchange exchange = new DelegatingServerWebExchange(serverHttpRequest,
-				this.exchange, this.messageReaders);
+		ServerHttpRequest serverHttpRequest = new BuiltServerHttpRequest(this.exchange.getRequest().getId(),
+				this.methodName, this.uri, this.headers, this.cookies, this.body);
+		ServerWebExchange exchange = new DelegatingServerWebExchange(
+				serverHttpRequest, this.attributes, this.exchange, this.messageReaders);
 		return new DefaultServerRequest(exchange, this.messageReaders);
 	}
+
 
 	private static class BuiltServerHttpRequest implements ServerHttpRequest {
 
 		private static final Pattern QUERY_PATTERN = Pattern.compile("([^&=]+)(=?)([^&]+)?");
 
+		private final String id;
 
-		private final HttpMethod method;
+		private final String method;
 
 		private final URI uri;
 
@@ -207,10 +206,10 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 		private final Flux<DataBuffer> body;
 
-		public BuiltServerHttpRequest(HttpMethod method, URI uri,
-				HttpHeaders headers,
-				MultiValueMap<String, HttpCookie> cookies,
-				Flux<DataBuffer> body) {
+		public BuiltServerHttpRequest(String id, String method, URI uri, HttpHeaders headers,
+				MultiValueMap<String, HttpCookie> cookies, Flux<DataBuffer> body) {
+
+			this.id = id;
 			this.method = method;
 			this.uri = uri;
 			this.path = RequestPath.parse(uri, null);
@@ -237,7 +236,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 						value = UriUtils.decode(value, StandardCharsets.UTF_8);
 					}
 					else {
-						value = StringUtils.hasLength(eq) ? "" : null;
+						value = (StringUtils.hasLength(eq) ? "" : null);
 					}
 					queryParams.add(name, value);
 				}
@@ -245,15 +244,14 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 			return queryParams;
 		}
 
-		@Nullable
 		@Override
-		public HttpMethod getMethod() {
-			return this.method;
+		public String getId() {
+			return this.id;
 		}
 
 		@Override
 		public String getMethodValue() {
-			return this.method.name();
+			return this.method;
 		}
 
 		@Override
@@ -287,6 +285,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 		}
 	}
 
+
 	private static class DelegatingServerWebExchange implements ServerWebExchange {
 
 		private static final ResolvableType FORM_DATA_TYPE =
@@ -296,14 +295,14 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 				MultiValueMap.class, String.class, Part.class);
 
 		private static final Mono<MultiValueMap<String, String>> EMPTY_FORM_DATA =
-				Mono.just(CollectionUtils.unmodifiableMultiValueMap(new LinkedMultiValueMap<String, String>(0)))
-						.cache();
+				Mono.just(CollectionUtils.unmodifiableMultiValueMap(new LinkedMultiValueMap<String, String>(0))).cache();
 
 		private static final Mono<MultiValueMap<String, Part>> EMPTY_MULTIPART_DATA =
-				Mono.just(CollectionUtils.unmodifiableMultiValueMap(new LinkedMultiValueMap<String, Part>(0)))
-						.cache();
+				Mono.just(CollectionUtils.unmodifiableMultiValueMap(new LinkedMultiValueMap<String, Part>(0))).cache();
 
 		private final ServerHttpRequest request;
+
+		private final Map<String, Object> attributes;
 
 		private final ServerWebExchange delegate;
 
@@ -311,9 +310,11 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 
 		private final Mono<MultiValueMap<String, Part>> multipartDataMono;
 
-		public DelegatingServerWebExchange(ServerHttpRequest request, ServerWebExchange delegate,
-				List<HttpMessageReader<?>> messageReaders) {
+		DelegatingServerWebExchange(ServerHttpRequest request, Map<String, Object> attributes,
+				ServerWebExchange delegate, List<HttpMessageReader<?>> messageReaders) {
+
 			this.request = request;
+			this.attributes = attributes;
 			this.delegate = delegate;
 			this.formDataMono = initFormData(request, messageReaders);
 			this.multipartDataMono = initMultipartData(request, messageReaders);
@@ -330,7 +331,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 							.filter(reader -> reader.canRead(FORM_DATA_TYPE, MediaType.APPLICATION_FORM_URLENCODED))
 							.findFirst()
 							.orElseThrow(() -> new IllegalStateException("No form data HttpMessageReader.")))
-							.readMono(FORM_DATA_TYPE, request, Collections.emptyMap())
+							.readMono(FORM_DATA_TYPE, request, Hints.none())
 							.switchIfEmpty(EMPTY_FORM_DATA)
 							.cache();
 				}
@@ -352,7 +353,7 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 							.filter(reader -> reader.canRead(MULTIPART_DATA_TYPE, MediaType.MULTIPART_FORM_DATA))
 							.findFirst()
 							.orElseThrow(() -> new IllegalStateException("No multipart HttpMessageReader.")))
-							.readMono(MULTIPART_DATA_TYPE, request, Collections.emptyMap())
+							.readMono(MULTIPART_DATA_TYPE, request, Hints.none())
 							.switchIfEmpty(EMPTY_MULTIPART_DATA)
 							.cache();
 				}
@@ -362,9 +363,15 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 			}
 			return EMPTY_MULTIPART_DATA;
 		}
+
 		@Override
 		public ServerHttpRequest getRequest() {
 			return this.request;
+		}
+
+		@Override
+		public Map<String, Object> getAttributes() {
+			return this.attributes;
 		}
 
 		@Override
@@ -385,11 +392,6 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 		}
 
 		@Override
-		public Map<String, Object> getAttributes() {
-			return this.delegate.getAttributes();
-		}
-
-		@Override
 		public Mono<WebSession> getSession() {
 			return this.delegate.getSession();
 		}
@@ -398,7 +400,6 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 		public <T extends Principal> Mono<T> getPrincipal() {
 			return this.delegate.getPrincipal();
 		}
-
 
 		@Override
 		public LocaleContext getLocaleContext() {
@@ -440,5 +441,11 @@ class DefaultServerRequestBuilder implements ServerRequest.Builder {
 		public void addUrlTransformer(Function<String, String> transformer) {
 			this.delegate.addUrlTransformer(transformer);
 		}
+
+		@Override
+		public String getLogPrefix() {
+			return this.delegate.getLogPrefix();
+		}
 	}
+
 }

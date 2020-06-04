@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,7 @@ package org.springframework.http.server.reactive;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.LinkedList;
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 import reactor.core.publisher.Flux;
@@ -30,7 +30,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
-import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 
@@ -45,17 +44,18 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 
 	private URI uri;
 
-	private HttpHeaders httpHeaders;
+	private HttpHeaders headers;
 
 	private String httpMethodValue;
-
-	private final MultiValueMap<String, HttpCookie> cookies;
 
 	@Nullable
 	private String uriPath;
 
 	@Nullable
 	private String contextPath;
+
+	@Nullable
+	private SslInfo sslInfo;
 
 	private Flux<DataBuffer> body;
 
@@ -66,20 +66,10 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 		Assert.notNull(original, "ServerHttpRequest is required");
 
 		this.uri = original.getURI();
+		this.headers = HttpHeaders.writableHttpHeaders(original.getHeaders());
 		this.httpMethodValue = original.getMethodValue();
 		this.body = original.getBody();
-
-		this.httpHeaders = new HttpHeaders();
-		copyMultiValueMap(original.getHeaders(), this.httpHeaders);
-
-		this.cookies = new LinkedMultiValueMap<>(original.getCookies().size());
-		copyMultiValueMap(original.getCookies(), this.cookies);
-
 		this.originalRequest = original;
-	}
-
-	private static <K, V> void copyMultiValueMap(MultiValueMap<K,V> source, MultiValueMap<K,V> target) {
-		source.forEach((key, value) -> target.put(key, new LinkedList<>(value)));
 	}
 
 
@@ -97,6 +87,7 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 
 	@Override
 	public ServerHttpRequest.Builder path(String path) {
+		Assert.isTrue(path.startsWith("/"), "The path does not have a leading slash.");
 		this.uriPath = path;
 		return this;
 	}
@@ -108,22 +99,28 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 	}
 
 	@Override
-	public ServerHttpRequest.Builder header(String key, String value) {
-		this.httpHeaders.add(key, value);
+	public ServerHttpRequest.Builder header(String headerName, String... headerValues) {
+		this.headers.put(headerName, Arrays.asList(headerValues));
 		return this;
 	}
 
 	@Override
 	public ServerHttpRequest.Builder headers(Consumer<HttpHeaders> headersConsumer) {
 		Assert.notNull(headersConsumer, "'headersConsumer' must not be null");
-		headersConsumer.accept(this.httpHeaders);
+		headersConsumer.accept(this.headers);
+		return this;
+	}
+
+	@Override
+	public ServerHttpRequest.Builder sslInfo(SslInfo sslInfo) {
+		this.sslInfo = sslInfo;
 		return this;
 	}
 
 	@Override
 	public ServerHttpRequest build() {
-		return new DefaultServerHttpRequest(getUriToUse(), this.contextPath, this.httpHeaders,
-				this.httpMethodValue, this.cookies, this.body, this.originalRequest);
+		return new MutatedServerHttpRequest(getUriToUse(), this.contextPath,
+				this.httpMethodValue, this.sslInfo, this.body, this.originalRequest);
 	}
 
 	private URI getUriToUse() {
@@ -165,14 +162,9 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 	}
 
 
-	private static class DefaultServerHttpRequest extends AbstractServerHttpRequest {
+	private static class MutatedServerHttpRequest extends AbstractServerHttpRequest {
 
 		private final String methodValue;
-
-		private final MultiValueMap<String, HttpCookie> cookies;
-
-		@Nullable
-		private final InetSocketAddress remoteAddress;
 
 		@Nullable
 		private final SslInfo sslInfo;
@@ -181,15 +173,14 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 
 		private final ServerHttpRequest originalRequest;
 
-		public DefaultServerHttpRequest(URI uri, @Nullable String contextPath,
-				HttpHeaders headers, String methodValue, MultiValueMap<String, HttpCookie> cookies,
+
+		public MutatedServerHttpRequest(URI uri, @Nullable String contextPath,
+				String methodValue, @Nullable SslInfo sslInfo,
 				Flux<DataBuffer> body, ServerHttpRequest originalRequest) {
 
-			super(uri, contextPath, headers);
+			super(uri, contextPath, originalRequest.getHeaders());
 			this.methodValue = methodValue;
-			this.cookies = cookies;
-			this.remoteAddress = originalRequest.getRemoteAddress();
-			this.sslInfo = originalRequest.getSslInfo();
+			this.sslInfo = sslInfo != null ? sslInfo : originalRequest.getSslInfo();
 			this.body = body;
 			this.originalRequest = originalRequest;
 		}
@@ -201,13 +192,19 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 
 		@Override
 		protected MultiValueMap<String, HttpCookie> initCookies() {
-			return this.cookies;
+			return this.originalRequest.getCookies();
 		}
 
 		@Nullable
 		@Override
 		public InetSocketAddress getRemoteAddress() {
-			return this.remoteAddress;
+			return this.originalRequest.getRemoteAddress();
+		}
+
+		@Nullable
+		@Override
+		public InetSocketAddress getLocalAddress() {
+			return this.originalRequest.getLocalAddress();
 		}
 
 		@Nullable
@@ -225,6 +222,11 @@ class DefaultServerHttpRequestBuilder implements ServerHttpRequest.Builder {
 		@Override
 		public <T> T getNativeRequest() {
 			return (T) this.originalRequest;
+		}
+
+		@Override
+		public String getId() {
+			return this.originalRequest.getId();
 		}
 	}
 

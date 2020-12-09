@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -176,7 +176,7 @@ public class CglibSubclassingInstantiationStrategy extends SimpleInstantiationSt
 
 		@Override
 		public boolean equals(Object other) {
-			return (getClass() == other.getClass() &&
+			return (other != null && getClass() == other.getClass() &&
 					this.beanDefinition.equals(((CglibIdentitySupport) other).beanDefinition));
 		}
 
@@ -249,7 +249,7 @@ public class CglibSubclassingInstantiationStrategy extends SimpleInstantiationSt
 		public int accept(Method method) {
 			MethodOverride methodOverride = getBeanDefinition().getMethodOverrides().getOverride(method);
 			if (logger.isTraceEnabled()) {
-				logger.trace("Override for '" + method.getName() + "' is [" + methodOverride + "]");
+				logger.trace("MethodOverride for " + method + ": " + methodOverride);
 			}
 			if (methodOverride == null) {
 				return PASSTHROUGH;
@@ -286,8 +286,10 @@ public class CglibSubclassingInstantiationStrategy extends SimpleInstantiationSt
 			Assert.state(lo != null, "LookupOverride not found");
 			Object[] argsToUse = (args.length > 0 ? args : null);  // if no-arg, don't insist on args at all
 			if (StringUtils.hasText(lo.getBeanName())) {
-				return (argsToUse != null ? this.owner.getBean(lo.getBeanName(), argsToUse) :
+				Object bean = (argsToUse != null ? this.owner.getBean(lo.getBeanName(), argsToUse) :
 						this.owner.getBean(lo.getBeanName()));
+				// Detect package-protected NullBean instance through equals(null) check
+				return (bean.equals(null) ? null : bean);
 			}
 			else {
 				return (argsToUse != null ? this.owner.getBean(method.getReturnType(), argsToUse) :

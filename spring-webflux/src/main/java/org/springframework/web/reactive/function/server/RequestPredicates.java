@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -76,8 +76,9 @@ public abstract class RequestPredicates {
 
 
 	/**
-	 * Return a {@code RequestPredicate} that tests against the given HTTP method.
-	 * @param httpMethod the HTTP method to match to
+	 * Return a {@code RequestPredicate} that matches if the request's
+	 * HTTP method is equal to the given method.
+	 * @param httpMethod the HTTP method to match against
 	 * @return a predicate that tests against the given HTTP method
 	 */
 	public static RequestPredicate method(HttpMethod httpMethod) {
@@ -85,7 +86,8 @@ public abstract class RequestPredicates {
 	}
 
 	/**
-	 * Return a {@code RequestPredicate} that tests the request path against the given path pattern.
+	 * Return a {@code RequestPredicate} that tests the request path
+	 * against the given path pattern.
 	 * @param pattern the pattern to match to
 	 * @return a predicate that tests against the given path pattern
 	 */
@@ -95,20 +97,22 @@ public abstract class RequestPredicates {
 	}
 
 	/**
-	 * Return a function that creates new path-matching {@code RequestPredicates} from pattern
-	 * Strings using the given {@link PathPatternParser}. This method can be used to specify a
-	 * non-default, customized {@code PathPatternParser} when resolving path patterns.
+	 * Return a function that creates new path-matching {@code RequestPredicates}
+	 * from pattern Strings using the given {@link PathPatternParser}.
+	 * <p>This method can be used to specify a non-default, customized
+	 * {@code PathPatternParser} when resolving path patterns.
 	 * @param patternParser the parser used to parse patterns given to the returned function
-	 * @return a function that resolves patterns Strings into path-matching
-	 * {@code RequestPredicate}s
+	 * @return a function that resolves a pattern String into a path-matching
+	 * {@code RequestPredicates} instance
 	 */
 	public static Function<String, RequestPredicate> pathPredicates(PathPatternParser patternParser) {
-		Assert.notNull(patternParser, "'patternParser' must not be null");
+		Assert.notNull(patternParser, "PathPatternParser must not be null");
 		return pattern -> new PathPatternPredicate(patternParser.parse(pattern));
 	}
 
 	/**
-	 * Return a {@code RequestPredicate} that tests the request's headers against the given headers predicate.
+	 * Return a {@code RequestPredicate} that tests the request's headers
+	 * against the given headers predicate.
 	 * @param headersPredicate a predicate that tests against the request headers
 	 * @return a predicate that tests against the given header predicate
 	 */
@@ -263,10 +267,17 @@ public abstract class RequestPredicates {
 	 */
 	public static RequestPredicate pathExtension(String extension) {
 		Assert.notNull(extension, "'extension' must not be null");
-		return pathExtension(pathExtension -> {
-			boolean match = extension.equalsIgnoreCase(pathExtension);
-			traceMatch("Extension", extension, pathExtension, match);
-			return match;
+		return pathExtension(new Predicate<String>() {
+			@Override
+			public boolean test(String pathExtension) {
+				boolean match = extension.equalsIgnoreCase(pathExtension);
+				traceMatch("Extension", extension, pathExtension, match);
+				return match;
+			}
+
+			public String toString() {
+				return String.format("*.%s", extension);
+			}
 		});
 	}
 
@@ -278,11 +289,29 @@ public abstract class RequestPredicates {
 	 * file extension
 	 */
 	public static RequestPredicate pathExtension(Predicate<String> extensionPredicate) {
-		Assert.notNull(extensionPredicate, "'extensionPredicate' must not be null");
-		return request -> {
-			String pathExtension = UriUtils.extractFileExtension(request.path());
-			return extensionPredicate.test(pathExtension);
-		};
+		return new PathExtensionPredicate(extensionPredicate);
+	}
+
+	/**
+	 * Return a {@code RequestPredicate} that matches if the request's query parameter of the given name
+	 * has the given value.
+	 * @param name the name of the query parameter to test against
+	 * @param value the value of the query parameter to test against
+	 * @return a predicate that matches if the query parameter has the given value
+	 * @since 5.0.7
+	 * @see ServerRequest#queryParam(String)
+	 */
+	public static RequestPredicate queryParam(String name, String value) {
+		return queryParam(name, new Predicate<String>() {
+			@Override
+			public boolean test(String s) {
+				return s.equals(value);
+			}
+			@Override
+			public String toString() {
+				return String.format("== %s", value);
+			}
+		});
 	}
 
 	/**
@@ -294,18 +323,14 @@ public abstract class RequestPredicates {
 	 * @see ServerRequest#queryParam(String)
 	 */
 	public static RequestPredicate queryParam(String name, Predicate<String> predicate) {
-		return request -> {
-			Optional<String> s = request.queryParam(name);
-			return s.filter(predicate).isPresent();
-		};
+		return new QueryParamPredicate(name, predicate);
 	}
 
 
 	private static void traceMatch(String prefix, Object desired, @Nullable Object actual, boolean match) {
 		if (logger.isTraceEnabled()) {
-			String message = String.format("%s \"%s\" %s against value \"%s\"",
-					prefix, desired, match ? "matches" : "does not match", actual);
-			logger.trace(message);
+			logger.trace(String.format("%s \"%s\" %s against value \"%s\"",
+					prefix, desired, match ? "matches" : "does not match", actual));
 		}
 	}
 
@@ -399,6 +424,60 @@ public abstract class RequestPredicates {
 		}
 	}
 
+
+	private static class PathExtensionPredicate implements RequestPredicate {
+
+		private final Predicate<String> extensionPredicate;
+
+		public PathExtensionPredicate(Predicate<String> extensionPredicate) {
+			Assert.notNull(extensionPredicate, "Predicate must not be null");
+			this.extensionPredicate = extensionPredicate;
+		}
+
+		@Override
+		public boolean test(ServerRequest request) {
+			String pathExtension = UriUtils.extractFileExtension(request.path());
+			return this.extensionPredicate.test(pathExtension);
+		}
+
+		@Override
+		public String toString() {
+			return this.extensionPredicate.toString();
+		}
+
+	}
+
+
+	private static class QueryParamPredicate implements RequestPredicate {
+
+		private final String name;
+
+		private final Predicate<String> predicate;
+
+		public QueryParamPredicate(String name, Predicate<String> predicate) {
+			Assert.notNull(name, "Name must not be null");
+			Assert.notNull(predicate, "Predicate must not be null");
+			this.name = name;
+			this.predicate = predicate;
+		}
+
+		@Override
+		public boolean test(ServerRequest request) {
+			Optional<String> s = request.queryParam(this.name);
+			return s.filter(this.predicate).isPresent();
+		}
+
+		@Override
+		public String toString() {
+			return String.format("?%s %s", this.name, this.predicate);
+		}
+	}
+
+
+	/**
+	 * {@link RequestPredicate} for where both {@code left} and {@code right} predicates
+	 * must match.
+	 */
 	static class AndRequestPredicate implements RequestPredicate {
 
 		private final RequestPredicate left;
@@ -428,6 +507,11 @@ public abstract class RequestPredicates {
 		}
 	}
 
+
+	/**
+	 * {@link RequestPredicate} for where either {@code left} or {@code right} predicates
+	 * may match.
+	 */
 	static class OrRequestPredicate implements RequestPredicate {
 
 		private final RequestPredicate left;
@@ -462,6 +546,7 @@ public abstract class RequestPredicates {
 			return String.format("(%s || %s)", this.left, this.right);
 		}
 	}
+
 
 	private static class SubPathServerRequestWrapper implements ServerRequest {
 

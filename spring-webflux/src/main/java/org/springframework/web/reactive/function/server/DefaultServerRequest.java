@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -76,12 +76,8 @@ class DefaultServerRequest implements ServerRequest {
 
 	DefaultServerRequest(ServerWebExchange exchange, List<HttpMessageReader<?>> messageReaders) {
 		this.exchange = exchange;
-		this.messageReaders = unmodifiableCopy(messageReaders);
+		this.messageReaders = Collections.unmodifiableList(new ArrayList<>(messageReaders));
 		this.headers = new DefaultHeaders();
-	}
-
-	private static <T> List<T> unmodifiableCopy(List<? extends T> list) {
-		return Collections.unmodifiableList(new ArrayList<>(list));
 	}
 
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -63,13 +63,14 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 	@Nullable
 	private ClientHttpConnector connector;
 
-	private ExchangeStrategies exchangeStrategies = ExchangeStrategies.withDefaults();
+	private ExchangeStrategies exchangeStrategies;
 
 	@Nullable
 	private ExchangeFunction exchangeFunction;
 
 
 	public DefaultWebClientBuilder() {
+		this.exchangeStrategies = ExchangeStrategies.withDefaults();
 	}
 
 	public DefaultWebClientBuilder(DefaultWebClientBuilder other) {
@@ -155,12 +156,6 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 	}
 
 	@Override
-	public WebClient.Builder clientConnector(ClientHttpConnector connector) {
-		this.connector = connector;
-		return this;
-	}
-
-	@Override
 	public WebClient.Builder filter(ExchangeFilterFunction filter) {
 		Assert.notNull(filter, "ExchangeFilterFunction must not be null");
 		initFilters().add(filter);
@@ -181,6 +176,12 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 	}
 
 	@Override
+	public WebClient.Builder clientConnector(ClientHttpConnector connector) {
+		this.connector = connector;
+		return this;
+	}
+
+	@Override
 	public WebClient.Builder exchangeStrategies(ExchangeStrategies strategies) {
 		Assert.notNull(strategies, "ExchangeStrategies must not be null");
 		this.exchangeStrategies = strategies;
@@ -191,6 +192,17 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 	public WebClient.Builder exchangeFunction(ExchangeFunction exchangeFunction) {
 		this.exchangeFunction = exchangeFunction;
 		return this;
+	}
+
+	@Override
+	public WebClient.Builder apply(Consumer<WebClient.Builder> builderConsumer) {
+		builderConsumer.accept(this);
+		return this;
+	}
+
+	@Override
+	public WebClient.Builder clone() {
+		return new DefaultWebClientBuilder(this);
 	}
 
 	@Override
@@ -207,9 +219,7 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 
 	private static @Nullable HttpHeaders unmodifiableCopy(@Nullable HttpHeaders original) {
 		if (original != null) {
-			HttpHeaders copy = new HttpHeaders();
-			copy.putAll(original);
-			return HttpHeaders.readOnlyHttpHeaders(copy);
+			return HttpHeaders.readOnlyHttpHeaders(original);
 		}
 		else {
 			return null;
@@ -229,9 +239,8 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 		if (this.uriBuilderFactory != null) {
 			return this.uriBuilderFactory;
 		}
-		DefaultUriBuilderFactory factory = this.baseUrl != null ?
-				new DefaultUriBuilderFactory(this.baseUrl) : new DefaultUriBuilderFactory();
-
+		DefaultUriBuilderFactory factory = (this.baseUrl != null ?
+				new DefaultUriBuilderFactory(this.baseUrl) : new DefaultUriBuilderFactory());
 		factory.setDefaultUriVariables(this.defaultUriVariables);
 		return factory;
 	}
@@ -243,21 +252,9 @@ final class DefaultWebClientBuilder implements WebClient.Builder {
 		else if (this.connector != null) {
 			return ExchangeFunctions.create(this.connector, this.exchangeStrategies);
 		}
-
 		else {
 			return ExchangeFunctions.create(new ReactorClientHttpConnector(), this.exchangeStrategies);
 		}
-	}
-
-	@Override
-	public WebClient.Builder clone() {
-		return new DefaultWebClientBuilder(this);
-	}
-
-	@Override
-	public WebClient.Builder apply(Consumer<WebClient.Builder> builderConsumer) {
-		builderConsumer.accept(this);
-		return this;
 	}
 
 }

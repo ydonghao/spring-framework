@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,7 +27,6 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonView;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.type.TypeFactory;
 
 import org.springframework.core.GenericTypeResolver;
 import org.springframework.core.MethodParameter;
@@ -49,7 +48,7 @@ public abstract class Jackson2CodecSupport {
 	/**
 	 * The key for the hint to specify a "JSON View" for encoding or decoding
 	 * with the value expected to be a {@link Class}.
-	 * @see <a href="http://wiki.fasterxml.com/JacksonJsonViews">Jackson JSON Views</a>
+	 * @see <a href="https://wiki.fasterxml.com/JacksonJsonViews">Jackson JSON Views</a>
 	 */
 	public static final String JSON_VIEW_HINT = Jackson2CodecSupport.class.getName() + ".jsonView";
 
@@ -95,8 +94,7 @@ public abstract class Jackson2CodecSupport {
 	}
 
 	protected JavaType getJavaType(Type type, @Nullable Class<?> contextClass) {
-		TypeFactory typeFactory = this.objectMapper.getTypeFactory();
-		return typeFactory.constructType(GenericTypeResolver.resolveType(type, contextClass));
+		return this.objectMapper.constructType(GenericTypeResolver.resolveType(type, contextClass));
 	}
 
 	protected Map<String, Object> getHints(ResolvableType resolvableType) {
@@ -114,7 +112,7 @@ public abstract class Jackson2CodecSupport {
 
 	@Nullable
 	protected MethodParameter getParameter(ResolvableType type) {
-		return type.getSource() instanceof MethodParameter ? (MethodParameter) type.getSource() : null;
+		return (type.getSource() instanceof MethodParameter ? (MethodParameter) type.getSource() : null);
 	}
 
 	@Nullable

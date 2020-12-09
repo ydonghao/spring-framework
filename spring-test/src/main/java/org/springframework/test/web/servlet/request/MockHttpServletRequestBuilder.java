@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -81,9 +81,6 @@ import org.springframework.web.util.UrlPathHelper;
  */
 public class MockHttpServletRequestBuilder
 		implements ConfigurableSmartRequestBuilder<MockHttpServletRequestBuilder>, Mergeable {
-
-	private static final UrlPathHelper urlPathHelper = new UrlPathHelper();
-
 
 	private final String method;
 
@@ -696,7 +693,7 @@ public class MockHttpServletRequestBuilder
 			}
 			String extraPath = requestUri.substring(this.contextPath.length() + this.servletPath.length());
 			this.pathInfo = (StringUtils.hasText(extraPath) ?
-					urlPathHelper.decodeRequestString(request, extraPath) : null);
+					UrlPathHelper.defaultInstance.decodeRequestString(request, extraPath) : null);
 		}
 		request.setPathInfo(this.pathInfo);
 	}

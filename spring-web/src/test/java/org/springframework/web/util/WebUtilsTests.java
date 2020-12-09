@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2016 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -86,6 +86,19 @@ public class WebUtilsTests {
 		variables = WebUtils.parseMatrixVariables("colors=red;colors=blue;colors=green");
 		assertEquals(1, variables.size());
 		assertEquals(Arrays.asList("red", "blue", "green"), variables.get("colors"));
+
+		variables = WebUtils.parseMatrixVariables("jsessionid=c0o7fszeb1");
+		assertTrue(variables.isEmpty());
+
+		variables = WebUtils.parseMatrixVariables("a=b;jsessionid=c0o7fszeb1;c=d");
+		assertEquals(2, variables.size());
+		assertEquals(Collections.singletonList("b"), variables.get("a"));
+		assertEquals(Collections.singletonList("d"), variables.get("c"));
+
+		variables = WebUtils.parseMatrixVariables("a=b;jsessionid=c0o7fszeb1;c=d");
+		assertEquals(2, variables.size());
+		assertEquals(Collections.singletonList("b"), variables.get("a"));
+		assertEquals(Collections.singletonList("d"), variables.get("c"));
 	}
 
 	@Test
@@ -108,7 +121,7 @@ public class WebUtilsTests {
 		assertTrue(checkSameOrigin("mydomain1.com", -1, "http://mydomain1.com:80"));
 		assertTrue(checkSameOrigin("mydomain1.com", 443, "https://mydomain1.com"));
 		assertTrue(checkSameOrigin("mydomain1.com", 443, "https://mydomain1.com:443"));
-		assertTrue(checkSameOrigin("mydomain1.com", 123, "http://mydomain1.com:123"));
+		assertTrue(checkSameOrigin("mydomain1.com", 123, "https://mydomain1.com:123"));
 		assertTrue(checkSameOrigin("mydomain1.com", -1, "ws://mydomain1.com"));
 		assertTrue(checkSameOrigin("mydomain1.com", 443, "wss://mydomain1.com"));
 
@@ -118,7 +131,7 @@ public class WebUtilsTests {
 
 		// Handling of invalid origins as described in SPR-13478
 		assertTrue(checkSameOrigin("mydomain1.com", -1, "http://mydomain1.com/"));
-		assertTrue(checkSameOrigin("mydomain1.com", -1, "http://mydomain1.com:80/"));
+		assertTrue(checkSameOrigin("mydomain1.com", -1, "http://mydomain1.com:80"));
 		assertTrue(checkSameOrigin("mydomain1.com", -1, "http://mydomain1.com/path"));
 		assertTrue(checkSameOrigin("mydomain1.com", -1, "http://mydomain1.com:80/path"));
 		assertFalse(checkSameOrigin("mydomain2.com", -1, "http://mydomain1.com/"));

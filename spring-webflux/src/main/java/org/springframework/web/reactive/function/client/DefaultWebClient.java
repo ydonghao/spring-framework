@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -134,7 +134,6 @@ class DefaultWebClient implements WebClient {
 		return methodInternal(httpMethod);
 	}
 
-	@SuppressWarnings("unchecked")
 	private RequestBodyUriSpec methodInternal(HttpMethod httpMethod) {
 		return new DefaultRequestBodyUriSpec(httpMethod);
 	}
@@ -162,7 +161,6 @@ class DefaultWebClient implements WebClient {
 		private BodyInserter<?, ? super ClientHttpRequest> inserter;
 
 		private final Map<String, Object> attributes = new LinkedHashMap<>(4);
-
 
 		DefaultRequestBodyUriSpec(HttpMethod httpMethod) {
 			this.httpMethod = httpMethod;
@@ -318,7 +316,7 @@ class DefaultWebClient implements WebClient {
 		}
 
 		private ClientRequest.Builder initRequestBuilder() {
-			URI uri = this.uri != null ? this.uri : uriBuilderFactory.expand("");
+			URI uri = (this.uri != null ? this.uri : uriBuilderFactory.expand(""));
 			return ClientRequest.create(this.httpMethod, uri)
 					.headers(headers -> headers.addAll(initHeaders()))
 					.cookies(cookies -> cookies.addAll(initCookies()))
@@ -346,7 +344,7 @@ class DefaultWebClient implements WebClient {
 
 		private MultiValueMap<String, String> initCookies() {
 			if (CollectionUtils.isEmpty(this.cookies)) {
-				return (defaultCookies != null ? defaultCookies : new LinkedMultiValueMap<>(0));
+				return (defaultCookies != null ? defaultCookies : new LinkedMultiValueMap<>());
 			}
 			else if (CollectionUtils.isEmpty(defaultCookies)) {
 				return this.cookies;
@@ -434,12 +432,22 @@ class DefaultWebClient implements WebClient {
 		private <T extends Publisher<?>> T bodyToPublisher(ClientResponse response,
 				T bodyPublisher, Function<Mono<? extends Throwable>, T> errorFunction) {
 
-			return this.statusHandlers.stream()
-					.filter(statusHandler -> statusHandler.test(response.statusCode()))
-					.findFirst()
-					.map(statusHandler -> statusHandler.apply(response))
-					.map(errorFunction::apply)
-					.orElse(bodyPublisher);
+			for (StatusHandler handler : this.statusHandlers) {
+				if (handler.test(response.statusCode())) {
+					Mono<? extends Throwable> exMono = handler.apply(response);
+					exMono = exMono.flatMap(ex -> drainBody(response, ex));
+					exMono = exMono.onErrorResume(ex -> drainBody(response, ex));
+					return errorFunction.apply(exMono);
+				}
+			}
+			return bodyPublisher;
+		}
+
+		@SuppressWarnings("unchecked")
+		private <T> Mono<T> drainBody(ClientResponse response, Throwable ex) {
+			// Ensure the body is drained, even if the StatusHandler didn't consume it,
+			// but ignore errors in case it did consume it.
+			return (Mono<T>) response.bodyToMono(Void.class).onErrorMap(ex2 -> ex).thenReturn(ex);
 		}
 
 		private static Mono<WebClientResponseException> createResponseException(ClientResponse response) {

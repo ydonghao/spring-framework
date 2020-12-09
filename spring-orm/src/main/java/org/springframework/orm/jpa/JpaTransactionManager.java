@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -138,7 +138,7 @@ public class JpaTransactionManager extends AbstractPlatformTransactionManager
 
 	/**
 	 * Create a new JpaTransactionManager instance.
-	 * @param emf EntityManagerFactory to manage transactions for
+	 * @param emf the EntityManagerFactory to manage transactions for
 	 */
 	public JpaTransactionManager(EntityManagerFactory emf) {
 		this();
@@ -255,7 +255,7 @@ public class JpaTransactionManager extends AbstractPlatformTransactionManager
 	 * @see org.springframework.jdbc.core.JdbcTemplate
 	 */
 	public void setDataSource(@Nullable DataSource dataSource) {
-		if (dataSource != null && dataSource instanceof TransactionAwareDataSourceProxy) {
+		if (dataSource instanceof TransactionAwareDataSourceProxy) {
 			// If we got a TransactionAwareDataSourceProxy, we need to perform transactions
 			// for its underlying target DataSource, else data access code won't see
 			// properly exposed transactions (i.e. transactions for the target DataSource).
@@ -420,7 +420,7 @@ public class JpaTransactionManager extends AbstractPlatformTransactionManager
 						conHolder.setTimeoutInSeconds(timeoutToUse);
 					}
 					if (logger.isDebugEnabled()) {
-						logger.debug("Exposing JPA transaction as JDBC transaction [" + conHandle + "]");
+						logger.debug("Exposing JPA transaction as JDBC [" + conHandle + "]");
 					}
 					TransactionSynchronizationManager.bindResource(getDataSource(), conHolder);
 					txObject.setConnectionHolder(conHolder);
@@ -537,9 +537,9 @@ public class JpaTransactionManager extends AbstractPlatformTransactionManager
 		}
 		catch (RollbackException ex) {
 			if (ex.getCause() instanceof RuntimeException) {
-				DataAccessException dex = getJpaDialect().translateExceptionIfPossible((RuntimeException) ex.getCause());
-				if (dex != null) {
-					throw dex;
+				DataAccessException dae = getJpaDialect().translateExceptionIfPossible((RuntimeException) ex.getCause());
+				if (dae != null) {
+					throw dae;
 				}
 			}
 			throw new TransactionSystemException("Could not commit JPA transaction", ex);
@@ -606,9 +606,9 @@ public class JpaTransactionManager extends AbstractPlatformTransactionManager
 					getJpaDialect().releaseJdbcConnection(conHandle,
 							txObject.getEntityManagerHolder().getEntityManager());
 				}
-				catch (Exception ex) {
+				catch (Throwable ex) {
 					// Just log it, to keep a transaction-related exception.
-					logger.error("Could not close JDBC connection after transaction", ex);
+					logger.error("Failed to release JDBC connection after transaction", ex);
 				}
 			}
 		}

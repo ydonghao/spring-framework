@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -76,7 +76,7 @@ public class ControllerMethodResolverTests {
 		applicationContext.refresh();
 
 		this.methodResolver = new ControllerMethodResolver(
-				resolvers, codecs.getReaders(), ReactiveAdapterRegistry.getSharedInstance(), applicationContext);
+				resolvers, ReactiveAdapterRegistry.getSharedInstance(), applicationContext, codecs.getReaders());
 
 		Method method = ResolvableMethod.on(TestController.class).mockCall(TestController::handle).method();
 		this.handlerMethod = new HandlerMethod(new TestController(), method);

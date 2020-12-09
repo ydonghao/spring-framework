@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,9 +25,11 @@ import org.junit.Test;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.tests.sample.beans.TestBean;
+import org.springframework.util.ObjectUtils;
 
 import static org.junit.Assert.*;
 
@@ -47,14 +49,18 @@ public class LazyAutowiredAnnotationBeanPostProcessorTests {
 		ac.registerBeanDefinition("testBean", tbd);
 		ac.refresh();
 
+		ConfigurableListableBeanFactory bf = ac.getBeanFactory();
 		TestBeanHolder bean = ac.getBean("annotatedBean", TestBeanHolder.class);
-		assertFalse(ac.getBeanFactory().containsSingleton("testBean"));
+		assertFalse(bf.containsSingleton("testBean"));
 		assertNotNull(bean.getTestBean());
 		assertNull(bean.getTestBean().getName());
-		assertTrue(ac.getBeanFactory().containsSingleton("testBean"));
+		assertTrue(bf.containsSingleton("testBean"));
 		TestBean tb = (TestBean) ac.getBean("testBean");
 		tb.setName("tb");
 		assertSame("tb", bean.getTestBean().getName());
+
+		assertTrue(ObjectUtils.containsElement(bf.getDependenciesForBean("annotatedBean"), "testBean"));
+		assertTrue(ObjectUtils.containsElement(bf.getDependentBeans("testBean"), "annotatedBean"));
 	}
 
 	@Test

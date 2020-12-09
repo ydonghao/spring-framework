@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -38,6 +38,7 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
 /**
  * {@code HttpMessageWriter} for {@code "text/event-stream"} responses.
@@ -135,7 +136,7 @@ public class ServerSentEventHttpMessageWriter implements HttpMessageWriter<Objec
 				writeField("retry", retry.toMillis(), sb);
 			}
 			if (comment != null) {
-				sb.append(':').append(comment.replaceAll("\\n", "\n:")).append("\n");
+				sb.append(':').append(StringUtils.replace(comment, "\n", "\n:")).append("\n");
 			}
 			if (data != null) {
 				sb.append("data:");
@@ -147,24 +148,24 @@ public class ServerSentEventHttpMessageWriter implements HttpMessageWriter<Objec
 		});
 	}
 
-	private void writeField(String fieldName, Object fieldValue, StringBuilder stringBuilder) {
-		stringBuilder.append(fieldName);
-		stringBuilder.append(':');
-		stringBuilder.append(fieldValue.toString());
-		stringBuilder.append("\n");
+	private void writeField(String fieldName, Object fieldValue, StringBuilder sb) {
+		sb.append(fieldName);
+		sb.append(':');
+		sb.append(fieldValue.toString());
+		sb.append("\n");
 	}
 
 	@SuppressWarnings("unchecked")
-	private <T> Flux<DataBuffer> encodeData(@Nullable T data, ResolvableType valueType,
+	private <T> Flux<DataBuffer> encodeData(@Nullable T dataValue, ResolvableType valueType,
 			MediaType mediaType, DataBufferFactory factory, Map<String, Object> hints) {
 
-		if (data == null) {
+		if (dataValue == null) {
 			return Flux.empty();
 		}
 
-		if (data instanceof String) {
-			String text = (String) data;
-			return Flux.from(encodeText(text.replaceAll("\\n", "\ndata:") + "\n", mediaType, factory));
+		if (dataValue instanceof String) {
+			String text = (String) dataValue;
+			return Flux.from(encodeText(StringUtils.replace(text, "\n", "\ndata:") + "\n", mediaType, factory));
 		}
 
 		if (this.encoder == null) {
@@ -172,7 +173,7 @@ public class ServerSentEventHttpMessageWriter implements HttpMessageWriter<Objec
 		}
 
 		return ((Encoder<T>) this.encoder)
-				.encode(Mono.just(data), factory, valueType, mediaType, hints)
+				.encode(Mono.just(dataValue), factory, valueType, mediaType, hints)
 				.concatWith(encodeText("\n", mediaType, factory));
 	}
 
@@ -199,8 +200,8 @@ public class ServerSentEventHttpMessageWriter implements HttpMessageWriter<Objec
 			@Nullable MediaType mediaType, ServerHttpRequest request, ServerHttpResponse response) {
 
 		if (this.encoder instanceof HttpMessageEncoder) {
-			HttpMessageEncoder<?> httpEncoder = (HttpMessageEncoder<?>) this.encoder;
-			return httpEncoder.getEncodeHints(actualType, elementType, mediaType, request, response);
+			HttpMessageEncoder<?> encoder = (HttpMessageEncoder<?>) this.encoder;
+			return encoder.getEncodeHints(actualType, elementType, mediaType, request, response);
 		}
 		return Collections.emptyMap();
 	}

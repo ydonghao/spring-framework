@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -375,15 +375,16 @@ public class RequestResponseBodyMethodProcessorTests {
 				Collections.singletonList(new StringHttpMessageConverter()),
 				factory.getObject());
 
-		assertContentDisposition(processor, false, "/hello.json", "whitelisted extension");
+		assertContentDisposition(processor, false, "/hello.json", "safe extension");
 		assertContentDisposition(processor, false, "/hello.pdf", "registered extension");
 		assertContentDisposition(processor, true, "/hello.dataless", "uknown extension");
 
 		// path parameters
 		assertContentDisposition(processor, false, "/hello.json;a=b", "path param shouldn't cause issue");
-		assertContentDisposition(processor, true, "/hello.json;a=b;setup.dataless", "uknown ext in path params");
-		assertContentDisposition(processor, true, "/hello.dataless;a=b;setup.json", "uknown ext in filename");
-		assertContentDisposition(processor, false, "/hello.json;a=b;setup.json", "whitelisted extensions");
+		assertContentDisposition(processor, true, "/hello.json;a=b;setup.dataless", "unknown ext in path params");
+		assertContentDisposition(processor, true, "/hello.dataless;a=b;setup.json", "unknown ext in filename");
+		assertContentDisposition(processor, false, "/hello.json;a=b;setup.json", "safe extensions");
+		assertContentDisposition(processor, true, "/hello.json;jsessionid=foo.bar", "jsessionid shouldn't cause issue");
 
 		// encoded dot
 		assertContentDisposition(processor, true, "/hello%2Edataless;a=b;setup.json", "encoded dot in filename");

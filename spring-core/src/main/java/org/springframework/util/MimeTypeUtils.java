@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2018 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import org.springframework.lang.Nullable;
 import org.springframework.util.MimeType.SpecificityComparator;
 
 /**
@@ -45,8 +46,6 @@ public abstract class MimeTypeUtils {
 					'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A',
 					'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U',
 					'V', 'W', 'X', 'Y', 'Z'};
-
-	private static final Random RND = new SecureRandom();
 
 	/**
 	 * Comparator used by {@link #sortBySpecificity(List)}.
@@ -153,6 +152,9 @@ public abstract class MimeTypeUtils {
 	 */
 	public static final String TEXT_XML_VALUE = "text/xml";
 
+	@Nullable
+	private static volatile Random random;
+
 
 	static {
 		ALL = MimeType.valueOf(ALL_VALUE);
@@ -197,7 +199,7 @@ public abstract class MimeTypeUtils {
 			throw new InvalidMimeTypeException(mimeType, "does not contain subtype after '/'");
 		}
 		String type = fullType.substring(0, subIndex);
-		String subtype = fullType.substring(subIndex + 1, fullType.length());
+		String subtype = fullType.substring(subIndex + 1);
 		if (MimeType.WILDCARD_TYPE.equals(type) && !MimeType.WILDCARD_TYPE.equals(subtype)) {
 			throw new InvalidMimeTypeException(mimeType, "wildcard type is legal only in '*/*' (all mime types)");
 		}
@@ -303,7 +305,7 @@ public abstract class MimeTypeUtils {
 	 * <blockquote>audio/basic == text/html</blockquote> <blockquote>audio/basic ==
 	 * audio/wave</blockquote>
 	 * @param mimeTypes the list of mime types to be sorted
-	 * @see <a href="http://tools.ietf.org/html/rfc7231#section-5.3.2">HTTP 1.1: Semantics
+	 * @see <a href="https://tools.ietf.org/html/rfc7231#section-5.3.2">HTTP 1.1: Semantics
 	 * and Content, section 5.3.2</a>
 	 */
 	public static void sortBySpecificity(List<MimeType> mimeTypes) {
@@ -314,15 +316,31 @@ public abstract class MimeTypeUtils {
 	}
 
 
-
+	/**
+	 * Lazily initialize the {@link SecureRandom} for {@link #generateMultipartBoundary()}.
+	 */
+	private static Random initRandom() {
+		Random randomToUse = random;
+		if (randomToUse == null) {
+			synchronized (MimeTypeUtils.class) {
+				randomToUse = random;
+				if (randomToUse == null) {
+					randomToUse = new SecureRandom();
+					random = randomToUse;
+				}
+			}
+		}
+		return randomToUse;
+	}
 
 	/**
 	 * Generate a random MIME boundary as bytes, often used in multipart mime types.
 	 */
 	public static byte[] generateMultipartBoundary() {
-		byte[] boundary = new byte[RND.nextInt(11) + 30];
+		Random randomToUse = initRandom();
+		byte[] boundary = new byte[randomToUse.nextInt(11) + 30];
 		for (int i = 0; i < boundary.length; i++) {
-			boundary[i] = BOUNDARY_CHARS[RND.nextInt(BOUNDARY_CHARS.length)];
+			boundary[i] = BOUNDARY_CHARS[randomToUse.nextInt(BOUNDARY_CHARS.length)];
 		}
 		return boundary;
 	}
